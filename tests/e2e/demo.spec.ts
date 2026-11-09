@@ -167,6 +167,14 @@ test("주요 화면의 WCAG 자동 접근성 점검", async ({ page }) => {
     if (path === "/sell/new") { await page.getByRole("button", { name: "다음" }).click(); await page.getByRole("button", { name: "다음" }).click(); await expect(page.getByText("장비 이름을 입력해 주세요.")).toBeVisible(); }
     if (path === "/market/seed-coffee") await expect(page.locator(".detail-summary h1")).toBeVisible();
     if (path === "/market") await expect(page.locator(".market-card").first()).toBeVisible();
+    if (path === "/policy") {
+      await expect(page.locator(".policy-summary-facts")).toContainText("경기도 내 1개 시·군");
+      await expect(page.locator(".policy-summary-facts")).toContainText("6개월");
+      await expect(page.locator(".policy-timeline li")).toHaveCount(4);
+      await expect(page.locator(".policy-budget-overview")).toContainText("효과 평가");
+      await expect(page.locator(".policy-budget-overview")).toContainText("성과 검증");
+      await expect(page.locator(".policy-budget-section")).toContainText("웹 화면에는 미확정 금액을 게시하지 않습니다");
+    }
     await page.locator(".demo-guide summary").click();
     await page.addScriptTag({ path: require.resolve("axe-core/axe.min.js") });
     const violations = await page.evaluate(async () => {
