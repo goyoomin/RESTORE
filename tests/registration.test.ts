@@ -3,14 +3,17 @@ import assert from "node:assert/strict";
 import { emptyForm, toAsset, validateForm } from "../lib/registration/form.ts";
 import { createDemoRepository, DemoStorageError, type StoragePort } from "../lib/repositories/demo-repository.ts";
 
-const valid = { ...emptyForm(), title: "  시연 커피머신  ", category: "주방·카페", condition: "일반 중고", askingPrice: "300000", district: "수원시", disposalDeadline: "2027-04-01" };
+const valid = { ...emptyForm(), title: "  시연 커피머신  ", category: "주방·카페", itemType: "커피머신", condition: "일반 중고", askingPrice: "300000", district: "수원시", disposalDeadline: "2027-04-01" };
 test("필수 항목·공백·금액·날짜를 검증한다", () => {
   assert.deepEqual(Object.keys(validateForm(emptyForm())).sort(), ["askingPrice", "category", "condition", "disposalDeadline", "district", "title"].sort());
+  assert.ok(validateForm({ ...emptyForm(), category: "주방·카페" }).itemType);
   assert.ok(validateForm({ ...valid, title: "   " }).title);
   for (const askingPrice of ["0", "-1", "1.2", "1e3", "9007199254740992"]) assert.ok(validateForm({ ...valid, askingPrice }).askingPrice);
   assert.ok(validateForm({ ...valid, disposalDeadline: "2027-02-29" }).disposalDeadline);
   assert.ok(validateForm({ ...valid, title: "가".repeat(61) }).title);
-  assert.deepEqual(validateForm(valid), {});
+  assert.ok(validateForm({ ...valid, disposalDeadline: "2026-11-08" }, "2026-11-09").disposalDeadline);
+  assert.ok(validateForm({ ...valid, itemType: "없는 품목" }).itemType);
+  assert.deepEqual(validateForm(valid, "2026-11-09"), {});
 });
 test("사진과 설명 없이 등록하고 새 저장소 인스턴스에서도 유지된다", () => {
   const values = new Map<string, string>();

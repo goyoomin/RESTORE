@@ -1,8 +1,10 @@
 import type { Asset, AssetStatus, BuyerNeed, DemoStore, DemoTransaction } from "../domain/models.ts";
-import { isAsset, isBuyerNeed, isDemoStore, isDemoTransaction } from "../domain/validation.ts";
+import { hasKnownAssetItemType, hasKnownNeedItemType, isAsset, isBuyerNeed, isDemoStore, isDemoTransaction } from "../domain/validation.ts";
 import { createSeedStore } from "../data/seed.ts";
+import { transactionConditionError } from "../simulation/transaction.ts";
 
-export const STORAGE_KEY = "restore-demo-v1";
+export const STORAGE_KEY = "restore-demo-v2";
+export const LEGACY_STORAGE_KEY = "restore-demo-v1";
 export type StoragePort = Pick<Storage, "getItem" | "setItem">;
 export class DemoStorageError extends Error {
   readonly reason: "invalid" | "unavailable" | "input";
@@ -14,7 +16,7 @@ export interface DemoRepository {
   toggleFavorite(id: string): DemoStore;
   setAssetStatus(id: string, status: AssetStatus): DemoStore;
   addBuyerNeed(need: BuyerNeed): DemoStore;
-  completeTransaction(transaction: DemoTransaction): DemoStore;
+  completeTransaction(transaction: DemoTransaction, today: string): DemoStore;
   reset(): DemoStore;
 }
 
@@ -27,19 +29,34 @@ export function createDemoRepository(storage: StoragePort): DemoRepository {
   }
   function load(): DemoStore {
     let raw: string | null;
-    try { raw = storage.getItem(STORAGE_KEY); }
+    let legacyKey = false;
+    try {
+      raw = storage.getItem(STORAGE_KEY);
+      if (raw === null) { raw = storage.getItem(LEGACY_STORAGE_KEY); legacyKey = raw !== null; }
+    }
     catch { throw new DemoStorageError("unavailable", "브라우저 저장소를 읽을 수 없습니다. 브라우저 설정을 확인해 주세요."); }
     if (raw === null) return write(createSeedStore());
     let parsed: unknown;
     try { parsed = JSON.parse(raw); }
     catch { throw new DemoStorageError("invalid", "저장된 데이터의 형식이 올바르지 않습니다. 초기화하면 가상 데이터로 복구할 수 있습니다."); }
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed) && (parsed as Record<string, unknown>).schemaVersion === 1) {
+      const migrated = { ...(parsed as Record<string, unknown>), schemaVersion: 2 };
+      if (!isDemoStore(migrated)) throw new DemoStorageError("invalid", "이전 저장 데이터의 형식이 올바르지 않습니다. 원본은 유지되어 있습니다.");
+      try { return write(migrated); }
+      catch (error) {
+        // Keep the readable legacy data usable if the browser cannot fit the migrated copy.
+        if (error instanceof DemoStorageError && error.reason === "unavailable") return migrated;
+        throw error;
+      }
+    }
     if (!isDemoStore(parsed)) throw new DemoStorageError("invalid", "저장된 데이터가 유효하지 않거나 지원하지 않는 버전입니다. 초기화하면 가상 데이터로 복구할 수 있습니다.");
+    if (legacyKey) return write(parsed);
     return parsed;
   }
   return {
     load,
     addAsset(asset) {
-      if (!isAsset(asset) || asset.dataOrigin !== "user") throw new DemoStorageError("input", "등록할 자산 정보가 올바르지 않습니다.");
+      if (!isAsset(asset) || !hasKnownAssetItemType(asset) || asset.dataOrigin !== "user") throw new DemoStorageError("input", "등록할 자산 정보 또는 세부 품목이 올바르지 않습니다.");
       const store = load();
       if (store.assets.some(item => item.id === asset.id)) throw new DemoStorageError("input", "이미 존재하는 자산입니다.");
       return write({ ...store, assets: [...store.assets, asset] });
@@ -57,16 +74,17 @@ export function createDemoRepository(storage: StoragePort): DemoRepository {
       return write({ ...store, assets: store.assets.map(asset => asset.id === id ? { ...asset, status } : asset) });
     },
     addBuyerNeed(need) {
-      if (!isBuyerNeed(need)) throw new DemoStorageError("input", "수요 정보가 올바르지 않습니다.");
+      if (!isBuyerNeed(need) || !hasKnownNeedItemType(need)) throw new DemoStorageError("input", "수요 정보 또는 세부 품목이 올바르지 않습니다.");
       const store = load();
       if (store.buyerNeeds.some(item => item.id === need.id)) throw new DemoStorageError("input", "이미 존재하는 수요입니다.");
       return write({ ...store, buyerNeeds: [...store.buyerNeeds, need] });
     },
-    completeTransaction(transaction) {
+    completeTransaction(transaction, today) {
       if (!isDemoTransaction(transaction)) throw new DemoStorageError("input", "가상 거래 정보가 올바르지 않습니다.");
       const store = load();
       const asset = store.assets.find(item => item.id === transaction.assetId);
-      if (!asset || asset.status !== "AVAILABLE" || transaction.completedAt > asset.disposalDeadline || store.transactions.some(item => item.id === transaction.id || item.assetId === transaction.assetId) || (transaction.buyerNeedId && !store.buyerNeeds.some(item => item.id === transaction.buyerNeedId))) throw new DemoStorageError("input", "가상 거래를 완료할 수 없습니다.");
+      const need = transaction.buyerNeedId ? store.buyerNeeds.find(item => item.id === transaction.buyerNeedId) : undefined;
+      if (!asset || (transaction.buyerNeedId && !need) || transactionConditionError(asset, transaction, need, today) || store.transactions.some(item => item.id === transaction.id || item.assetId === transaction.assetId)) throw new DemoStorageError("input", "가상 거래를 완료할 수 없습니다. 거래 가능 상태, 예산, 품목, 인수 희망일을 다시 확인해 주세요.");
       return write({ ...store, assets: store.assets.map(item => item.id === asset.id ? { ...item, status: "COMPLETED" } : item), transactions: [...store.transactions, transaction] });
     },
     reset: () => write(createSeedStore()),

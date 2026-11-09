@@ -6,7 +6,7 @@ import { createDemoRepository, STORAGE_KEY, type StoragePort } from "../lib/repo
 import { toAsset, emptyForm } from "../lib/registration/form.ts";
 
 const today = "2027-03-01";
-const assets = createSeedStore().assets;
+const assets = createSeedStore("2026-12-31").assets;
 const filters = emptyFilters();
 test("장비명·카테고리·설명 검색과 복합 필터, 빈 결과", () => {
   assert.equal(filterAssets(assets, { ...filters, query: "커피머신" }, today)[0].id, "seed-coffee");
@@ -33,12 +33,15 @@ test("가격·최신·기한 정렬은 예상한 순서이며 기한 경과는 �
   const high = filterAssets(assets, { ...filters, sort: "price-high" }, today);
   assert.equal(low[0].id, "seed-desk"); assert.equal(high[0].id, "seed-coffee");
   const deadlines = filterAssets(assets, { ...filters, sort: "deadline" }, today);
-  assert.equal(deadlines[0].id, "seed-ice"); assert.ok(deadlines.at(-1)!.disposalDeadline < today);
+  assert.equal(deadlines[0].id, "seed-ice");
+  const expired = { ...assets[0], id: "expired-test", disposalDeadline: "2027-02-28" };
+  const withExpired = filterAssets([...assets, expired], { ...filters, sort: "deadline" }, today);
+  assert.equal(withExpired.at(-1)?.id, "expired-test");
 });
 test("관심 추가·해제와 등록 자산은 저장소 재조회 후 유지된다", () => {
   const values = new Map<string, string>(); const storage: StoragePort = { getItem: key => values.get(key) ?? null, setItem: (key, value) => { values.set(key, value); } };
   const repo = createDemoRepository(storage); const old = repo.load(); assert.equal(old.favoriteIds, undefined);
-  const asset = toAsset({ ...emptyForm(), title: "내 장비", category: "기타", condition: "일반 중고", askingPrice: "1000", district: "수원시", disposalDeadline: "2027-04-01" }, "my-item", "2026-11-08");
+  const asset = toAsset({ ...emptyForm(), title: "내 장비", category: "기타", itemType: "기타 장비", condition: "일반 중고", askingPrice: "1000", district: "수원시", disposalDeadline: "2027-04-01" }, "my-item", "2026-11-08");
   repo.addAsset(asset); repo.toggleFavorite(asset.id);
   const reloaded = createDemoRepository(storage).load(); assert.equal(reloaded.assets.find(a => a.id === asset.id)?.title, "내 장비"); assert.deepEqual(reloaded.favoriteIds, [asset.id]);
   repo.toggleFavorite(asset.id); assert.deepEqual(createDemoRepository(storage).load().favoriteIds, []);

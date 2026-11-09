@@ -36,7 +36,7 @@ export function AssetPreview() {
         <div className="preview-grid">
           {assets.map((asset) => (
             <Link className="preview-card" key={asset.id} href={`/market/${encodeURIComponent(asset.id)}`}>
-              <div className="preview-image"><AssetImage image={asset.image} title={asset.title} /></div>
+              <div className="preview-image"><AssetImage image={asset.image} title={asset.title} itemType={asset.itemType} /></div>
               <div className="preview-card-copy">
                 <span className="preview-category">{asset.category} <span aria-hidden="true">·</span> {asset.dataOrigin === "seed" ? "가상 시연 데이터" : "사용자 등록 데모"}</span>
                 <h3>{asset.title}</h3>

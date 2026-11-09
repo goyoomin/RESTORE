@@ -4,7 +4,7 @@ import type { Asset, AssetStatus, BuyerNeed, DemoStore, DemoTransaction } from "
 import { createDemoRepository, DemoStorageError, STORAGE_KEY, type DemoRepository } from "../repositories/demo-repository";
 
 type View = { status: "loading"; data: null; error: null } | { status: "ready"; data: DemoStore; error: null } | { status: "error"; data: null; error: string };
-type DemoContextValue = View & { addAsset: (asset: Asset) => boolean; toggleFavorite: (id: string) => boolean; setAssetStatus: (id: string, status: AssetStatus) => boolean; addBuyerNeed: (need: BuyerNeed) => boolean; completeTransaction: (transaction: DemoTransaction) => boolean; reset: () => boolean; refresh: () => void };
+type DemoContextValue = View & { addAsset: (asset: Asset) => boolean; toggleFavorite: (id: string) => boolean; setAssetStatus: (id: string, status: AssetStatus) => boolean; addBuyerNeed: (need: BuyerNeed) => boolean; completeTransaction: (transaction: DemoTransaction, today: string) => boolean; reset: () => boolean; refresh: () => void };
 const DemoContext = createContext<DemoContextValue | null>(null);
 const loading: View = { status: "loading", data: null, error: null };
 function repository(): DemoRepository { return createDemoRepository(window.localStorage); }
@@ -23,7 +23,7 @@ export function DemoProvider({ children }: { children: ReactNode }) {
     window.addEventListener("storage", onStorage);
     return () => { window.clearTimeout(timer); window.removeEventListener("storage", onStorage); };
   }, [refresh]);
-  const value = useMemo<DemoContextValue>(() => ({ ...view, refresh, addAsset: asset => run(repo => repo.addAsset(asset)), toggleFavorite: id => run(repo => repo.toggleFavorite(id)), setAssetStatus: (id, status) => run(repo => repo.setAssetStatus(id, status)), addBuyerNeed: need => run(repo => repo.addBuyerNeed(need)), completeTransaction: transaction => run(repo => repo.completeTransaction(transaction), true), reset: () => run(repo => repo.reset()) }), [view, refresh, run]);
+  const value = useMemo<DemoContextValue>(() => ({ ...view, refresh, addAsset: asset => run(repo => repo.addAsset(asset)), toggleFavorite: id => run(repo => repo.toggleFavorite(id)), setAssetStatus: (id, status) => run(repo => repo.setAssetStatus(id, status)), addBuyerNeed: need => run(repo => repo.addBuyerNeed(need)), completeTransaction: (transaction, today) => run(repo => repo.completeTransaction(transaction, today), true), reset: () => run(repo => repo.reset()) }), [view, refresh, run]);
   return <DemoContext.Provider value={value}>{children}</DemoContext.Provider>;
 }
 export function useDemoStore(): DemoContextValue {

@@ -19,7 +19,7 @@ export function filterAssets(assets: Asset[], filters: MarketFilters, today: str
   if (priceError(filters)) return [];
   const query = filters.query.trim().toLocaleLowerCase("ko-KR");
   return assets.map((asset, index) => ({ asset, index })).filter(({ asset }) => {
-    return (!query || [asset.title, asset.category, asset.description].some(value => value.toLocaleLowerCase("ko-KR").includes(query))) &&
+    return (!query || [asset.title, asset.category, asset.itemType ?? "", asset.description].some(value => value.toLocaleLowerCase("ko-KR").includes(query))) &&
       (!filters.category || filters.category === asset.category) && (!filters.district || filters.district === asset.district) && (!filters.condition || filters.condition === asset.condition) &&
       (!filters.minPrice || asset.askingPrice >= Number(filters.minPrice)) && (!filters.maxPrice || asset.askingPrice <= Number(filters.maxPrice)) &&
       (!filters.availability || availability(asset, today) === filters.availability);

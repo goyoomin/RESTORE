@@ -5,13 +5,14 @@ import { CATEGORIES, type Category } from "@/lib/domain/models";
 import { isAnalysisSuggestion, type AnalysisSuggestion } from "@/lib/ai/contracts";
 
 type Status = "idle" | "loading" | "ready" | "error";
-export function AiAssetSuggestion({ image, onApply, onManual }: { image: string; onApply: (value: AnalysisSuggestion) => void; onManual: () => void }) {
+export function AiAssetSuggestion({ image, enabled, onApply, onManual }: { image: string; enabled: boolean; onApply: (value: AnalysisSuggestion) => void; onManual: () => void }) {
   const [status, setStatus] = useState<Status>("idle");
   const [message, setMessage] = useState("");
   const [suggestion, setSuggestion] = useState<AnalysisSuggestion | null>(null);
   const [features, setFeatures] = useState(""); const [checks, setChecks] = useState("");
   const abortRef = useRef<AbortController | null>(null);
   useEffect(() => () => { abortRef.current?.abort(); }, []);
+  if (!enabled) return <aside className="ai-suggestion ai-unavailable" aria-label="AI 사진 분석 안내"><div className="ai-suggestion-heading"><Sparkles size={19} aria-hidden="true" /><strong>AI 사진 분석은 현재 사용할 수 없어요</strong></div><p>배포 환경에서는 보안과 비용 보호를 위해 AI 분석 API가 비활성화되어 있습니다. 사진은 참고용으로 등록되고, 장비 정보는 직접 입력해 주세요.</p><button type="button" className="photo-remove" onClick={onManual}>직접 입력하기</button></aside>;
   async function analyze() {
     if (status === "loading") return;
     const controller = new AbortController(); abortRef.current = controller;

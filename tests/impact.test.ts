@@ -25,8 +25,8 @@ test("중복, 비시연 및 완료 상태가 아닌 기록은 집계하지 않�
 });
 test("완료 직후 집계되고 초기화 후 다시 0으로 돌아온다", () => {
  const map = new Map<string,string>(); const storage: StoragePort = { getItem: key => map.get(key) ?? null, setItem: (key,value) => { map.set(key,value); } };
- const repo = createDemoRepository(storage); const complete = repo.completeTransaction(example); assert.equal(calculateImpact(complete.transactions, complete.assets).count, 1);
- assert.throws(() => repo.completeTransaction({ ...example, id: "again" })); const reset = repo.reset(); assert.equal(calculateImpact(reset.transactions, reset.assets).count, 0); assert.equal(reset.assets.length, 8);
+ const repo = createDemoRepository(storage); const complete = repo.completeTransaction(example, example.completedAt); assert.equal(calculateImpact(complete.transactions, complete.assets).count, 1);
+ assert.throws(() => repo.completeTransaction({ ...example, id: "again" }, example.completedAt)); const reset = repo.reset(); assert.equal(calculateImpact(reset.transactions, reset.assets).count, 0); assert.equal(reset.assets.length, 8);
 });
 test("시범사업 계산기는 입력 변경·0·유효하지 않은 값과 큰 정수를 정확히 처리", () => {
  const base = { shops: "10", transactionsPerShop: "2", recoveryPerTransaction: "100", savingsPerTransaction: "50" };

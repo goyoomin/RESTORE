@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createDemoRepository, DemoStorageError, STORAGE_KEY, type StoragePort } from "../lib/repositories/demo-repository.ts";
+import { createDemoRepository, DemoStorageError, LEGACY_STORAGE_KEY, STORAGE_KEY, type StoragePort } from "../lib/repositories/demo-repository.ts";
 import { isAsset, isDate, isDemoStore, isDemoTransaction } from "../lib/domain/validation.ts";
 import type { Asset, DemoTransaction } from "../lib/domain/models.ts";
 
@@ -10,7 +10,8 @@ function memoryStorage(initial?: string) {
   const storage: StoragePort = { getItem: key => values.get(key) ?? null, setItem: (key, value) => { values.set(key, value); } };
   return { storage, values };
 }
-const userAsset: Asset = { id: "user-1", title: "시연 책상", category: "사무·전자", description: "사용자 데모", condition: "양호", askingPrice: 10000, region: "경기도", district: "수원시", disposalDeadline: "2027-04-01", status: "AVAILABLE", image: "desk", createdAt: "2026-11-08", dataOrigin: "user" };
+const userAsset: Asset = { id: "user-1", title: "시연 책상", category: "사무·전자", description: "사용자 데모", itemType: "사무용 책상", condition: "양호", askingPrice: 10000, region: "경기도", district: "수원시", disposalDeadline: "2027-04-01", status: "AVAILABLE", image: "desk", createdAt: "2026-11-08", dataOrigin: "user" };
+function withoutItemType<T extends { itemType?: unknown }>(value: T): Omit<T, "itemType"> { const copy = { ...value }; delete copy.itemType; return copy; }
 
 test("첫 방문 시 시드 생성, 재로드 시 저장값 유지, 추가와 상태 변경, 초기화", () => {
   const { storage } = memoryStorage();
@@ -30,7 +31,7 @@ test("첫 방문 시 시드 생성, 재로드 시 저장값 유지, 추가와 �
 });
 
 test("잘못된 저장값은 덮어쓰지 않고 오류를 반환하며 명시적 초기화로 복구", () => {
-  for (const invalid of ["{broken", JSON.stringify({ schemaVersion: 2, assets: [], buyerNeeds: [], transactions: [] }), JSON.stringify({ schemaVersion: 1, assets: [userAsset, userAsset], buyerNeeds: [], transactions: [] })]) {
+  for (const invalid of ["{broken", JSON.stringify({ schemaVersion: 3, assets: [], buyerNeeds: [], transactions: [] }), JSON.stringify({ schemaVersion: 1, assets: [userAsset, userAsset], buyerNeeds: [], transactions: [] })]) {
     const { storage, values } = memoryStorage(invalid);
     const repo = createDemoRepository(storage);
     assert.throws(() => repo.load(), (e: unknown) => e instanceof DemoStorageError && e.reason === "invalid");
@@ -46,16 +47,53 @@ test("금액과 날짜, 가상 거래 및 참조 무결성 검증", () => {
   assert.equal(isAsset({ ...userAsset, askingPrice: -1 }), false);
   assert.equal(isAsset({ ...userAsset, askingPrice: 1.5 }), false);
   assert.equal(isAsset({ ...userAsset, createdAt: "2026-02-30" }), false);
-  const transaction: DemoTransaction = { id: "tx-1", assetId: "seed-coffee", buyerNeedId: "need-coffee", transactionPrice: 1000000, sellerCost: 0, buyerShippingCost: 30000, completedAt: "2026-11-08", simulated: true };
+  const today = "2026-11-09";
+  const transaction: DemoTransaction = { id: "tx-1", assetId: "seed-coffee", buyerNeedId: "need-coffee", transactionPrice: 1000000, sellerCost: 0, buyerShippingCost: 30000, completedAt: today, simulated: true };
   assert.equal(isDemoTransaction({ ...transaction, simulated: false }), false);
   const { storage } = memoryStorage();
   const repo = createDemoRepository(storage);
-  const complete = repo.completeTransaction(transaction);
+  const complete = repo.completeTransaction(transaction, today);
   assert.equal(complete.assets.find(item => item.id === transaction.assetId)?.status, "COMPLETED");
   assert.equal(complete.transactions[0].simulated, true);
-  assert.throws(() => repo.completeTransaction({ ...transaction, id: "tx-2" }), DemoStorageError);
+  assert.throws(() => repo.completeTransaction({ ...transaction, id: "tx-2" }, today), DemoStorageError);
   assert.throws(() => repo.setAssetStatus(transaction.assetId, "AVAILABLE"), DemoStorageError);
   assert.equal(isDemoStore({ ...complete, transactions: [{ ...transaction, buyerNeedId: "missing" }] }), false);
+});
+
+test("v1 데이터를 보존하며 v2로 옮기고 품목을 모르는 기존 자산은 모르는 채로 둔다", () => {
+  const current = createDemoRepository(memoryStorage().storage).load();
+  const oldCoffee = withoutItemType(current.assets[0]);
+  const completed = { ...oldCoffee, status: "COMPLETED" as const };
+  const user = { ...userAsset, itemType: undefined };
+  const legacy = {
+    schemaVersion: 1,
+    assets: [completed, ...current.assets.slice(1).map(withoutItemType), user],
+    buyerNeeds: current.buyerNeeds.map(withoutItemType),
+    transactions: [{ id: "old-tx", assetId: completed.id, buyerNeedId: "need-coffee", transactionPrice: 800000, sellerCost: 0, buyerShippingCost: 20000, completedAt: "2026-11-09", simulated: true }],
+    favoriteIds: [completed.id],
+  };
+  const raw = JSON.stringify(legacy);
+  const values = new Map<string, string>([[LEGACY_STORAGE_KEY, raw]]);
+  const storage: StoragePort = { getItem: key => values.get(key) ?? null, setItem: (key, value) => { values.set(key, value); } };
+  const migrated = createDemoRepository(storage).load();
+  assert.equal(migrated.schemaVersion, 2);
+  assert.equal(migrated.assets.length, legacy.assets.length);
+  assert.equal(migrated.assets.find(asset => asset.id === user.id)?.itemType, undefined);
+  assert.equal(migrated.buyerNeeds[0].itemType, undefined);
+  assert.equal(migrated.transactions[0].id, "old-tx");
+  assert.deepEqual(migrated.favoriteIds, [completed.id]);
+  assert.equal(values.get(LEGACY_STORAGE_KEY), raw);
+  assert.equal(JSON.parse(values.get(STORAGE_KEY)!).schemaVersion, 2);
+  assert.equal(isDemoStore(migrated), true);
+});
+
+test("v1 데이터 용량 부족 시 기존 저장값을 읽을 수 있게 반환하고 원본을 보존한다", () => {
+  const current = createDemoRepository(memoryStorage().storage).load();
+  const old = JSON.stringify({ ...current, schemaVersion: 1, assets: current.assets.map(withoutItemType), buyerNeeds: current.buyerNeeds.map(withoutItemType) });
+  const storage: StoragePort = { getItem: key => key === LEGACY_STORAGE_KEY ? old : null, setItem: () => { throw new Error("quota"); } };
+  const migrated = createDemoRepository(storage).load();
+  assert.equal(migrated.schemaVersion, 2);
+  assert.equal(migrated.assets.length, 8);
 });
 
 test("저장소 접근 또는 쓰기 실패를 사용자에게 알릴 수 있는 오류로 반환", () => {
