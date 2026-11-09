@@ -1,0 +1,32 @@
+"use client";
+import Link from "next/link";
+import { useState, type FormEvent } from "react";
+import { ArrowRight, CheckCircle2, Search } from "lucide-react";
+import { CATEGORIES, type BuyerNeed, type Category } from "@/lib/domain/models";
+import { isDate } from "@/lib/domain/validation";
+import { DISTRICTS } from "@/lib/registration/form";
+import { rankMatches } from "@/lib/matching/match";
+import { useLocalToday } from "@/lib/market/use-local-today";
+import { redactContacts } from "@/lib/market/filters";
+import { useDemoStore } from "@/lib/state/demo-provider";
+import { AssetImage } from "./asset-image";
+import { Container } from "./ui";
+export function SmartMatching() {
+  const demo = useDemoStore(); const today = useLocalToday();
+  const [category, setCategory] = useState(""); const [budget, setBudget] = useState(""); const [district, setDistrict] = useState(""); const [neighborhood, setNeighborhood] = useState(""); const [pickup, setPickup] = useState("");
+  const [error, setError] = useState(""); const [needId, setNeedId] = useState("");
+  const need = demo.status === "ready" ? demo.data.buyerNeeds.find(item => item.id === needId) : undefined;
+  const results = demo.status === "ready" && need ? rankMatches(demo.data.assets, need, today) : [];
+  function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!(CATEGORIES as readonly string[]).includes(category)) return setError("필요한 장비 카테고리를 선택해 주세요.");
+    if (!/^\d+$/.test(budget) || !Number.isSafeInteger(Number(budget)) || Number(budget) <= 0) return setError("최대 예산을 0원보다 큰 정수로 입력해 주세요.");
+    if (!(DISTRICTS as readonly string[]).includes(district)) return setError("희망 시·군을 선택해 주세요.");
+    if (neighborhood.trim().length > 30) return setError("세부 지역은 30자 이내로 입력해 주세요.");
+    if (!isDate(pickup) || pickup < today) return setError("오늘 이후의 유효한 인수 희망일을 선택해 주세요.");
+    const newNeed: BuyerNeed = { id: crypto.randomUUID(), category: category as Category, maxBudget: Number(budget), preferredRegion: "경기도", preferredDistrict: district, ...(neighborhood.trim() ? { preferredNeighborhood: neighborhood.trim() } : {}), desiredPickupDate: pickup, createdAt: today };
+    if (demo.addBuyerNeed(newNeed)) { setNeedId(newNeed.id); setError(""); }
+    else setError("조건을 저장하지 못했습니다. 브라우저 저장소를 확인해 주세요.");
+  }
+  return <main className="matching-page"><div className="matching-hero"><Container><span className="eyebrow">SMART MATCHING</span><h1>필요한 장비를<br />조건에 맞게 찾아보세요.</h1><p>창업에 필요한 조건을 알려주시면 시연 데이터에서 적합한 장비를 찾아드립니다.</p></Container></div><Container><div className="matching-layout"><section className="matching-form-card"><h2>어떤 장비가 필요하세요?</h2><p>입력하신 조건은 이 브라우저에만 저장됩니다. 상세 주소와 개인정보는 입력하지 마세요.</p><form onSubmit={submit} noValidate className="matching-form"><div className="form-field"><label htmlFor="need-category">필요한 장비 카테고리 *</label><select id="need-category" value={category} onChange={e => setCategory(e.target.value)} required><option value="">카테고리 선택</option>{CATEGORIES.map(x => <option key={x}>{x}</option>)}</select></div><div className="form-field"><label htmlFor="need-budget">최대 구매 예산 *</label><div className="price-input"><input id="need-budget" inputMode="numeric" value={budget} maxLength={15} onChange={e => setBudget(e.target.value)} placeholder="예: 1000000" required /><span>원</span></div></div><div className="form-field"><label htmlFor="need-city">희망 시·군 *</label><select id="need-city" value={district} onChange={e => setDistrict(e.target.value)} required><option value="">경기도 시·군 선택</option>{DISTRICTS.map(x => <option key={x}>{x}</option>)}</select></div><div className="form-field"><label htmlFor="need-neighborhood">희망 세부 지역 <span>(선택)</span></label><input id="need-neighborhood" value={neighborhood} onChange={e => setNeighborhood(e.target.value)} maxLength={30} placeholder="예: 인계동 (읍·면·동까지만)" /></div><div className="form-field"><label htmlFor="need-pickup">인수 희망일 *</label><input id="need-pickup" type="date" suppressHydrationWarning min={today} value={pickup} onChange={e => setPickup(e.target.value)} required /></div>{error && <p className="field-error" role="alert">{error}</p>}{demo.status === "error" && <p className="field-error" role="alert">{demo.error} <button type="button" onClick={demo.refresh}>다시 불러오기</button></p>}<button type="submit" className="button button-primary" disabled={demo.status === "loading"}>조건에 맞는 장비 찾기 <Search size={17} /></button></form></section><section className="matching-results" aria-live="polite"><div className="matching-results-heading"><span className="eyebrow">YOUR RECOMMENDATIONS</span><h2>조건 기반 추천 결과</h2><p>추천 점수는 입력 조건에 따른 규칙 기반 적합도이며, 실제 거래 성공 확률이 아닙니다.</p><p>조건과 장비·가격은 모두 시연용이며 실제 거래를 보장하지 않습니다.</p></div>{need && <p className="matching-criteria">저장된 조건: {need.category} · {need.maxBudget.toLocaleString("ko-KR")}원 이하 · {need.preferredDistrict}{need.preferredNeighborhood ? ` ${need.preferredNeighborhood}` : ""} · {need.desiredPickupDate} 인수</p>}{!need && <div className="matching-empty"><Search size={30} /><h3>조건을 입력해 주세요</h3><p>입력하신 조건과 장비의 카테고리, 가격, 지역, 일정을 비교합니다.</p></div>}{need && results.length === 0 && <div className="matching-empty"><Search size={30} /><h3>조건에 맞는 장비가 아직 없어요.</h3><p>카테고리, 예산, 거래 가능 상태 또는 인수 일정에 맞는 장비가 없을 수 있습니다. 예산을 변경하거나 희망 지역을 바꿔 다시 살펴보세요. 다른 경기도 시·군도 추천 대상에 포함됩니다.</p><Link href="/market" className="button button-secondary">장비 목록으로 이동 <ArrowRight size={16} /></Link></div>}{need && results.length > 0 && <><p className="match-count">조건에 맞는 가상 장비 <strong>{results.length}개</strong></p><div className="match-list">{results.map(({ asset, score, reasons }) => <article className="match-card" key={asset.id}><div className="match-card-top"><div className="match-image"><AssetImage image={asset.image} title={redactContacts(asset.title)} /></div><div className="match-info"><span>{asset.dataOrigin === "seed" ? "가상 시연 데이터" : "사용자 등록 데모"} · {asset.category}</span><h3>{redactContacts(asset.title)}</h3><strong>{asset.askingPrice.toLocaleString("ko-KR")}원 <small>시연 가격</small></strong><p>{asset.region} {asset.district} · 처분 예정 {asset.disposalDeadline}</p></div><div className="match-score"><strong>{score}</strong><span>점 / 100점</span></div></div><ul>{reasons.map(reason => <li key={reason}><CheckCircle2 size={15} /> {reason}</li>)}</ul><Link className="match-link" href={`/market/${encodeURIComponent(asset.id)}?need=${encodeURIComponent(need.id)}`}>장비 상세 보기 <ArrowRight size={16} /></Link></article>)}</div></>}</section></div></Container></main>;
+}
