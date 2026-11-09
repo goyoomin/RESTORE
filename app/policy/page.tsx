@@ -3,9 +3,9 @@ import { ArrowRight, Handshake, Recycle, Sprout } from "lucide-react";
 import { Container, SectionHeading } from "@/components/ui";
 
 const phases = [
-  ["1개월 차", "모집·안내", "대상자를 모집하고 자산 확인, 운송, 개인정보, 분쟁 절차를 설명합니다."],
-  ["2–3개월 차", "등록·확인", "자산의 소유권과 기본 상태를 확인하고 세부 품목과 수요 조건을 기록합니다."],
-  ["4–5개월 차", "매칭·인수", "조건을 연결하고 당사자가 비용·일정에 합의하면 인수 확인과 비용 자료를 수집합니다."],
+  ["1개월 차", "모집·운영 준비", "참여 안내와 동의 절차, 자산 확인 기준, 운송·분쟁 대응 경로를 준비합니다."],
+  ["2–5개월 차 · 상시", "접수·자산 등록", "폐업·철거 일정에 맞춰 자산을 수시 접수합니다. 일괄 모집 기간이 끝날 때까지 기다리지 않습니다."],
+  ["2–5개월 차 · 병행", "검수·매칭·인수", "등록 자산별로 확인 즉시 수요를 연결하고 인수 일정을 조율합니다. 철거 기한이 가까운 건은 우선 처리합니다."],
   ["6개월 차", "평가·정리", "성사·미성사 이유, 비용, 만족도, 분쟁 여부를 검토하고 결과와 한계를 정리합니다."],
 ];
 
@@ -36,7 +36,7 @@ export default function PolicyPage() {
         <div className="policy-summary-heading"><span className="eyebrow">PILOT AT A GLANCE · PROPOSAL</span><h2 id="pilot-summary-title">시범사업 한눈에 보기</h2><p>운영 모델을 구체화하기 위한 가정입니다. 대상·지역·기간은 협의 후 정해야 합니다.</p></div>
         <dl className="policy-summary-facts"><div><dt>대상 지역</dt><dd>경기도 내 1개 시·군</dd></div><div><dt>운영 기간</dt><dd>6개월</dd></div><div><dt>참여 규모 가정</dt><dd>판매자 최대 50곳<br />구매자 최대 50명</dd></div></dl>
         <ol className="policy-timeline" aria-label="6개월 시범사업 운영 과정">{phases.map(([period, title, description]) => <li key={period}><span>{period}</span><strong>{title}</strong><p>{description}</p></li>)}</ol>
-        <p className="policy-caption">지역은 참여자 모집 기반, 지원기관 접근성, 이동 거리와 협의 가능성을 확인해 선정합니다. 특정 지역의 선정 또는 기관 참여가 확정된 것은 아닙니다.</p>
+        <p className="policy-caption">2–5개월 차에는 자산별 등록 이후 검수·매칭·인수 절차를 수시로 병행합니다. 정해진 매칭 기간까지 대기하지 않고, 폐업자의 철거 예정일이 임박한 자산을 우선 조율합니다. 실제 처리 기준과 목표 응답시간은 운영 주체·운송 여건 확인 후 정합니다. 지역은 참여자 기반, 지원기관 접근성, 이동 범위를 조사해 선정하며 특정 지역이나 기관 참여가 확정된 것은 아닙니다.</p>
       </section>
 
       <section className="policy-section policy-intro"><div><SectionHeading eyebrow="WHY RE:STORE" title={<>소중한 자산에<br />다음 기회를</>} /></div><div><p>폐업 소상공인에게 남은 집기·설비는 회수가 필요한 자산이고, 창업자에게는 시작 전에 마련해야 할 비용입니다.</p><p>다시가게는 두 필요를 연결해 자산 회수와 초기 비용 완화 가능성을 검토합니다. 이는 검증할 정책 가설이지 이미 입증된 효과가 아닙니다.</p></div></section>

@@ -171,6 +171,9 @@ test("주요 화면의 WCAG 자동 접근성 점검", async ({ page }) => {
       await expect(page.locator(".policy-summary-facts")).toContainText("경기도 내 1개 시·군");
       await expect(page.locator(".policy-summary-facts")).toContainText("6개월");
       await expect(page.locator(".policy-timeline li")).toHaveCount(4);
+      await expect(page.locator(".policy-timeline")).toContainText("2–5개월 차 · 상시");
+      await expect(page.locator(".policy-timeline")).toContainText("2–5개월 차 · 병행");
+      await expect(page.locator(".policy-summary")).toContainText("철거 예정일이 임박한 자산을 우선 조율합니다");
       await expect(page.locator(".policy-budget-overview")).toContainText("효과 평가");
       await expect(page.locator(".policy-budget-overview")).toContainText("성과 검증");
       await expect(page.locator(".policy-budget-section")).toContainText("웹 화면에는 미확정 금액을 게시하지 않습니다");
