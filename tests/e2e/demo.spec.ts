@@ -92,6 +92,7 @@ test("없는 ID, 손상된 저장값과 빈 검색 결과를 안내한다", asyn
   await expect(page.getByRole("heading", { name: "장비를 찾을 수 없어요" })).toBeVisible();
   await page.goto("/market");
   await expect(page.locator(".market-card").first()).toBeVisible();
+  await expect(page.locator(".market-card .equipment-art").first()).toBeAttached();
   await page.evaluate(() => { const data = JSON.parse(localStorage.getItem("restore-demo-v2")!); data.assets[0].disposalDeadline = "2000-01-01"; localStorage.setItem("restore-demo-v2", JSON.stringify(data)); });
   await page.reload();
   await expect(page.locator(".market-card").filter({ hasText: "업소용 커피머신" })).toContainText("처분 기한 지남");
@@ -103,6 +104,40 @@ test("없는 ID, 손상된 저장값과 빈 검색 결과를 안내한다", asyn
   page.once("dialog", dialog => dialog.accept());
   await page.getByRole("button", { name: "초기 데이터로 되돌리기" }).click();
   await expect(page.getByRole("heading", { name: "다시 쓰일 장비들" })).toBeVisible();
+});
+
+test("레거시 자산의 품목을 보완해도 이미지와 기존 거래 기록을 보존한다", async ({ page }) => {
+  await page.goto("/market");
+  await page.evaluate(() => {
+    const data = JSON.parse(localStorage.getItem("restore-demo-v2")!);
+    const asset = data.assets.find((item: { id: string }) => item.id === "seed-coffee");
+    asset.status = "COMPLETED";
+    for (const item of data.assets) delete item.itemType;
+    for (const need of data.buyerNeeds) delete need.itemType;
+    data.schemaVersion = 1;
+    data.transactions = [{ id: "legacy-transaction", assetId: asset.id, buyerNeedId: "need-coffee", transactionPrice: 900000, sellerCost: 10000, buyerShippingCost: 20000, referenceNewPrice: 1200000, comparisonSource: "기존 시연 가정", completedAt: "2026-11-09", simulated: true }];
+    localStorage.setItem("restore-demo-v1", JSON.stringify(data));
+    localStorage.removeItem("restore-demo-v2");
+  });
+  await page.reload();
+  await page.goto("/market/seed-coffee");
+  await expect(page.getByText("품목 미확인").first()).toBeVisible();
+  await expect(page.getByRole("heading", { name: "세부 품목이 필요한 자산" })).toBeVisible();
+  await page.locator("#legacy-item-type").selectOption({ label: "커피머신" });
+  await page.getByRole("button", { name: "세부 품목 저장" }).click();
+  await expect(page.getByRole("status").filter({ hasText: "기존 사진과 거래 기록은 유지됩니다" })).toBeVisible();
+  const saved = await page.evaluate(() => {
+    const data = JSON.parse(localStorage.getItem("restore-demo-v2")!);
+    const asset = data.assets.find((item: { id: string }) => item.id === "seed-coffee");
+    return { schemaVersion: data.schemaVersion, itemType: asset.itemType, image: asset.image, transaction: data.transactions[0] };
+  });
+  expect(saved.schemaVersion).toBe(2);
+  expect(saved.itemType).toBe("커피머신");
+  expect(saved.image).toBe("coffee");
+  expect(saved.transaction).toMatchObject({ id: "legacy-transaction", transactionPrice: 900000, comparisonSource: "기존 시연 가정" });
+  await page.reload();
+  await expect(page.locator(".detail-facts")).toContainText("커피머신");
+  await expect(page.locator("#legacy-item-type")).toHaveCount(0);
 });
 
 test("모바일 메뉴 및 주요 화면은 360px에서 가로로 넘치지 않는다", async ({ page }) => {

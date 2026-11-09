@@ -1,5 +1,5 @@
-import type { Asset, AssetStatus, BuyerNeed, DemoStore, DemoTransaction } from "../domain/models.ts";
-import { hasKnownAssetItemType, hasKnownNeedItemType, isAsset, isBuyerNeed, isDemoStore, isDemoTransaction } from "../domain/validation.ts";
+import type { Asset, AssetStatus, BuyerNeed, DemoStore, DemoTransaction, ItemType } from "../domain/models.ts";
+import { hasKnownAssetItemType, hasKnownNeedItemType, isAsset, isBuyerNeed, isDemoStore, isDemoTransaction, isItemTypeForCategory } from "../domain/validation.ts";
 import { createSeedStore } from "../data/seed.ts";
 import { transactionConditionError } from "../simulation/transaction.ts";
 
@@ -15,6 +15,7 @@ export interface DemoRepository {
   addAsset(asset: Asset): DemoStore;
   toggleFavorite(id: string): DemoStore;
   setAssetStatus(id: string, status: AssetStatus): DemoStore;
+  setLegacyAssetItemType(id: string, itemType: ItemType): DemoStore;
   addBuyerNeed(need: BuyerNeed): DemoStore;
   completeTransaction(transaction: DemoTransaction, today: string): DemoStore;
   reset(): DemoStore;
@@ -72,6 +73,14 @@ export function createDemoRepository(storage: StoragePort): DemoRepository {
       if (!store.assets.some(asset => asset.id === id)) throw new DemoStorageError("input", "자산을 찾을 수 없습니다.");
       if (status !== "COMPLETED" && store.transactions.some(t => t.assetId === id)) throw new DemoStorageError("input", "완료 기록이 있는 자산의 상태를 변경할 수 없습니다.");
       return write({ ...store, assets: store.assets.map(asset => asset.id === id ? { ...asset, status } : asset) });
+    },
+    setLegacyAssetItemType(id, itemType) {
+      const store = load();
+      const asset = store.assets.find(item => item.id === id);
+      if (!asset) throw new DemoStorageError("input", "자산을 찾을 수 없습니다.");
+      if (hasKnownAssetItemType(asset)) throw new DemoStorageError("input", "이미 세부 품목이 지정된 자산입니다.");
+      if (!isItemTypeForCategory(itemType, asset.category)) throw new DemoStorageError("input", "선택한 세부 품목이 자산 카테고리와 맞지 않습니다.");
+      return write({ ...store, assets: store.assets.map(item => item.id === id ? { ...item, itemType } : item) });
     },
     addBuyerNeed(need) {
       if (!isBuyerNeed(need) || !hasKnownNeedItemType(need)) throw new DemoStorageError("input", "수요 정보 또는 세부 품목이 올바르지 않습니다.");

@@ -96,6 +96,28 @@ test("v1 데이터 용량 부족 시 기존 저장값을 읽을 수 있게 반�
   assert.equal(migrated.assets.length, 8);
 });
 
+test("이전 자산의 세부 품목만 보완하고 사진·다른 정보·가상 거래는 보존한다", () => {
+  const { storage } = memoryStorage();
+  const initial = createDemoRepository(storage).load();
+  const coffee = initial.assets.find(asset => asset.id === "seed-coffee")!;
+  const oldTransaction: DemoTransaction = { id: "kept-tx", assetId: coffee.id, buyerNeedId: "need-coffee", transactionPrice: 900000, sellerCost: 10000, buyerShippingCost: 20000, referenceNewPrice: 1200000, comparisonSource: "기존 시연 가정", completedAt: "2026-11-09", simulated: true };
+  const legacyAsset = { ...withoutItemType(coffee), status: "COMPLETED" as const };
+  const legacyData = { ...initial, assets: initial.assets.map(asset => asset.id === coffee.id ? legacyAsset : asset), transactions: [oldTransaction] };
+  storage.setItem(STORAGE_KEY, JSON.stringify(legacyData));
+
+  const repository = createDemoRepository(storage);
+  assert.throws(() => repository.setLegacyAssetItemType(coffee.id, "제빙기"));
+  const updated = repository.setLegacyAssetItemType(coffee.id, "커피머신");
+  const after = updated.assets.find(asset => asset.id === coffee.id)!;
+  assert.equal(after.itemType, "커피머신");
+  assert.equal(after.image, coffee.image);
+  assert.equal(after.title, coffee.title);
+  assert.equal(after.askingPrice, coffee.askingPrice);
+  assert.equal(after.status, "COMPLETED");
+  assert.deepEqual(updated.transactions, [oldTransaction]);
+  assert.throws(() => repository.setLegacyAssetItemType(coffee.id, "커피머신"));
+});
+
 test("저장소 접근 또는 쓰기 실패를 사용자에게 알릴 수 있는 오류로 반환", () => {
   const blocked: StoragePort = { getItem: () => { throw new Error("blocked"); }, setItem: () => { throw new Error("blocked"); } };
   assert.throws(() => createDemoRepository(blocked).load(), (e: unknown) => e instanceof DemoStorageError && e.reason === "unavailable");
